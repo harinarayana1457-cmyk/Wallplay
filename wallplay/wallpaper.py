@@ -529,17 +529,23 @@ class Wall:
     def __init__(self):
         ensure_dir()
         self.file = STATE_DIR / "wall.json"
+        self.reload()
+
+    # ---------------------------------------------------------- state
+    def reload(self):
         self.s = read_json(self.file, {})
         if "original" not in self.s:
             self._capture_original()
 
-    # ---------------------------------------------------------- state
     def save(self):
         write_json(self.file, self.s)
         self._cleanup_bases()
 
     def _cleanup_bases(self):
-        used = {self.s.get("base")} | {h.get("base") for h in self.s.get("history", [])}
+        disk = read_json(self.file, self.s)
+        used = {self.s.get("base"), disk.get("base")}
+        for h in self.s.get("history", []) + disk.get("history", []):
+            used.add(h.get("base"))
         for p in STATE_DIR.glob("base_*.png"):
             if p.name not in used:
                 with contextlib.suppress(OSError):
@@ -578,6 +584,7 @@ class Wall:
     @contextlib.contextmanager
     def change(self, apply=True):
         """Snapshot for undo, let the caller mutate, then save (+apply)."""
+        self.reload()
         snap = {k: copy.deepcopy(self.s[k]) for k in ("base", "filters", "layers")}
         yield
         hist = self.s.setdefault("history", [])
@@ -587,7 +594,9 @@ class Wall:
         if apply and self.auto:
             self.apply()
 
-    def undo(self) -> bool:
+    def undo_step(self) -> bool:
+        """Undo just the most recent single change."""
+        self.reload()
         hist = self.s.get("history", [])
         if not hist:
             return False
@@ -595,6 +604,11 @@ class Wall:
         self.save()
         if self.auto:
             self.apply()
+        return True
+
+    def undo(self) -> bool:
+        """Undo all wallpaper changes (base, filters, stickers/layers) back to original."""
+        self.restore()
         return True
 
     # ---------------------------------------------------------- base
@@ -622,35 +636,36 @@ class Wall:
             raise WallplayError(f"Not an image I can read: {p}") from None
         self.set_base_image(img)
 
-    def original_base(self):
+    def original_base(self, keep_overlays: bool = False):
+        self.reload()
         cp = self.s["original"].get("copy")
         if not cp or not Path(cp).exists():
             raise WallplayError("I don't have a copy of your original wallpaper.")
-        self.set_base_image(Image.open(cp))
+        with self.change():
+            self.s["base"] = self._new_base(Image.open(cp))
+            if not keep_overlays:
+                self.s["filters"] = []
+                self.s["layers"] = []
 
     def reset(self):
-        with self.change():
-            cp = self.s["original"].get("copy")
-            if cp and Path(cp).exists():
-                self.s["base"] = self._new_base(Image.open(cp))
-            self.s["filters"] = []
-            self.s["layers"] = []
+        self.restore()
 
     def restore(self):
         """Put the user's original wallpaper back exactly as it was."""
+        self.reload()
         o = self.s["original"]
         target = o.get("path")
         if not target or not Path(target).exists():
             target = o.get("copy")
         if not target or not Path(target).exists():
             raise WallplayError("Original wallpaper file is missing.")
-        _reg_set("WallpaperStyle", o.get("style", "10"))
-        _reg_set("TileWallpaper", o.get("tile", "0"))
-        winapi.set_wallpaper(target)
         with self.change(apply=False):
             if o.get("copy") and Path(o["copy"]).exists():
                 self.s["base"] = self._new_base(Image.open(o["copy"]))
             self.s["filters"], self.s["layers"] = [], []
+        _reg_set("WallpaperStyle", o.get("style", "10"))
+        _reg_set("TileWallpaper", o.get("tile", "0"))
+        winapi.set_wallpaper(target)
         return target
 
     # ---------------------------------------------------------- filters
@@ -720,7 +735,13 @@ class Wall:
     def render(self, size=None) -> Image.Image:
         W, H = size or winapi.screen_size()
         bp = STATE_DIR / str(self.s.get("base"))
-        base = Image.open(bp).convert("RGB") if bp.is_file() else make_aurora((W, H), 1)
+        orig_copy = self.s.get("original", {}).get("copy")
+        if bp.is_file():
+            base = Image.open(bp).convert("RGB")
+        elif orig_copy and Path(orig_copy).is_file():
+            base = Image.open(orig_copy).convert("RGB")
+        else:
+            base = make_aurora((W, H), 1)
         img = ImageOps.fit(base, (W, H), Image.LANCZOS)
         for f in self.s["filters"]:
             img = FILTERS[f["name"]]["fn"](img, *f["args"]).convert("RGB")

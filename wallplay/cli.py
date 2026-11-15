@@ -124,6 +124,7 @@ class App:
     def run_tokens(self, tokens: list[str]) -> bool:
         if not tokens:
             return True
+        self.wall.reload()
         cmd = tokens[0].lower()
         rest = tokens[1:]
 
@@ -154,8 +155,12 @@ class App:
             self.wall.image(" ".join(rest))
             ok(f"Wallpaper base set from {rest[0]}.")
         elif cmd == "original":
-            self.wall.original_base()
-            ok("Base reset to your original wallpaper (keeping filters/layers).")
+            keep = bool(rest and rest[0].lower() in ("base", "keep"))
+            self.wall.original_base(keep_overlays=keep)
+            if keep:
+                ok("Base reset to your original wallpaper (keeping filters/layers).")
+            else:
+                ok("Reset to your clean original wallpaper (cleared filters & stickers/layers).")
         elif cmd in wpmod.FILTERS:
             self.wall.add_filter(cmd, rest)
             ok(f"Added filter [bold]{cmd}[/] {' '.join(rest)}".strip())
@@ -211,10 +216,19 @@ class App:
                     self.wall.s["layers"] = []
                 ok("Cleared all filters and layers.")
         elif cmd == "undo":
-            if self.wall.undo():
-                ok("Undid last wallpaper change.")
+            sub = rest[0].lower() if rest else "all"
+            if sub in ("step", "1", "last", "one"):
+                if self.wall.undo_step():
+                    ok("Undid last single step.")
+                else:
+                    warn("Nothing left in history to step back.")
             else:
-                warn("Nothing left to undo.")
+                stop_live(quiet=True)
+                self.wall.restore()
+                if (icmod.LAYOUT_DIR / "original.json").exists():
+                    with _suppress_missing():
+                        self.desk().load_layout("original")
+                ok("Undid all changes — stickers, widgets, filters, wallpaper & icons restored to original. (Use `undo step` to undo just 1 step.)")
         elif cmd == "reset":
             self.wall.reset()
             ok("Reset to your clean original wallpaper.")
@@ -571,7 +585,8 @@ class App:
 
 [bold cyan]Windows Colours & Safety[/]
   [bold]theme[/] <dark|light|toggle|glass on|off|bars on|off>   [bold]accent[/] <color|match|auto|random>
-  [bold]undo[/] · [bold]clear[/] \[layers|filters|all] · [bold]reset[/] · [bold]restore[/] (puts *everything* back as it was)
+  [bold]undo[/] (undoes all changes: stickers, filters, base & icons) · [bold]undo step[/] (undo 1 step)
+  [bold]clear[/] \[layers|filters|all] · [bold]reset[/] · [bold]restore[/]
   [bold]preset save[/] <name> · [bold]preset load[/] <name> · [bold]preview[/] · [bold]export[/] <file.png>"""
         console.print(Panel(text, title="wallplay commands", border_style="bright_blue"))
 
