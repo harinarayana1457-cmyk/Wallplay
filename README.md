@@ -340,6 +340,7 @@ Desktop customization tools often mess up desktop icon grids, leaving users frus
 | `accent` | `<color \| match \| auto \| random>` | Change Windows accent color or match from wallpaper |
 | `preset save` / `load` | `<name>` | Save or load full desktop theme (wallpaper + filters + widgets + icons) |
 | `status` | *None* | Display real-time telemetry card (resolution, theme, icon count, live PID) |
+| `undo` | `[all \| step]` | Undo all changes (stickers, widgets, filters, wallpaper & icons), or `undo step` for 1 step |
 | `restore` | *None* | Emergency rollback: restores original wallpaper and icon positions |
 
 ---
