@@ -17,7 +17,7 @@ A powerful, lightweight, non-destructive CLI & REPL studio to style, animate, an
 
 <br/>
 
-[Overview](#-overview) • [Live Terminal Preview](#-live-terminal-preview) • [System Architecture](#-system-architecture) • [Key Highlights](#-key-highlights) • [Installation & Quickstart](#-installation--quickstart) • [Feature Deep Dive](#-feature-deep-dive) • [CLI Command Reference](#-cli-command-reference) • [Safety & Restoration](#-safety--restoration-guarantee) • [Project Structure](#-project-structure) • [Connect & Author](#-connect--author)
+[Overview](#-overview) • [Live Visual Previews](#-live-visual-previews) • [System Architecture](#-system-architecture) • [Key Highlights](#-key-highlights) • [Installation & Quickstart](#-installation--quickstart) • [Feature Deep Dive](#-feature-deep-dive) • [CLI Command Reference](#-cli-command-reference) • [Safety & Restoration](#-safety--restoration-guarantee) • [Project Structure](#-project-structure) • [Connect & Author](#-connect--author)
 
 ---
 
@@ -36,13 +36,24 @@ Whether you want to generate smooth procedural aurora wallpapers, stack cyberpun
 
 ---
 
-## 🖥️ Live Terminal Preview
+## 🖥️ Live Visual Previews
 
-Wallplay provides an interactive REPL shell equipped with real-time hardware and desktop telemetry, auto-command hints, and instant visual execution:
+### 1. Interactive REPL Studio & Hardware Telemetry
+Wallplay features a rich, interactive REPL console displaying real-time desktop telemetry, active themes, live layers, and smart command suggestions:
 
 <div align="center">
   <img src="assets/wallplay_terminal.png" alt="Wallplay Interactive Studio Terminal" width="100%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);" />
-  <p><em>Interactive Wallplay Studio showing resolution detection (2880×1620), Windows Dark theme sync, 55 tracked desktop icons, and active background live layer (snow PID 8680).</em></p>
+  <p><em>Interactive Wallplay Studio showing resolution detection (2880×1620), Windows Dark theme sync, 55 tracked desktop icons, and active background live layer.</em></p>
+</div>
+
+<br/>
+
+### 2. Live Matrix Rain Running Behind Desktop Icons
+Unlike traditional overlays that block interaction, Wallplay injects directly into Windows `WorkerW` to stream 60 FPS live animated wallpapers **behind** your desktop icons, folders, and open windows:
+
+<div align="center">
+  <img src="assets/wallplay_live_matrix.jpg" alt="Wallplay Live Matrix Behind Desktop Icons" width="100%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);" />
+  <p><em>Real-world demonstration: <code>wallplay live matrix</code> streaming digital green rain behind Windows desktop folders (<code>WALL</code>, <code>Intern</code>, <code>webdek</code>) without interfering with desktop interactions.</em></p>
 </div>
 
 ---
@@ -350,7 +361,8 @@ Desktop customization tools often mess up desktop icon grids, leaving users frus
 ```
 Wallplay/
 ├── assets/
-│   └── wallplay_terminal.png    # Live REPL terminal interface preview
+│   ├── wallplay_terminal.png    # Live REPL terminal interface & telemetry dashboard
+│   └── wallplay_live_matrix.jpg # Live matrix wallpaper streaming behind desktop icons
 ├── wallplay/
 │   ├── __init__.py              # Package entry & version metadata
 │   ├── __main__.py              # Python module entrypoint (`python -m wallplay`)
