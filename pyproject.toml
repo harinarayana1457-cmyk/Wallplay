@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wallplay"
+version = "0.1.0"
+description = "Play with your Windows desktop from the terminal: wallpaper effects, stickers, widgets, dancing icons and live interactive wallpapers."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pillow>=10.1", "rich>=13"]
+classifiers = ["Operating System :: Microsoft :: Windows", "Environment :: Console"]
+
+[project.scripts]
+wallplay = "wallplay.cli:main"
+
+[tool.setuptools]
+packages = ["wallplay"]
