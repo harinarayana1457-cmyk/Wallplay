@@ -73,9 +73,10 @@ GetTickCount64 = _proto(kernel32, "GetTickCount64", ctypes.c_ulonglong)
 GWL_STYLE, GWL_EXSTYLE = -16, -20
 WS_CHILD, WS_VISIBLE, WS_POPUP = 0x40000000, 0x10000000, 0x80000000
 WS_CAPTION, WS_THICKFRAME, WS_SYSMENU = 0x00C00000, 0x00040000, 0x00080000
-WS_EX_LAYERED, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW = 0x00080000, 0x00040000, 0x00000080
+WS_EX_LAYERED, WS_EX_TRANSPARENT = 0x00080000, 0x00000020
+WS_EX_APPWINDOW, WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE = 0x00040000, 0x00000080, 0x08000000
 SWP_NOSIZE, SWP_NOMOVE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SWP_FRAMECHANGED = 0x1, 0x2, 0x10, 0x40, 0x20
-LWA_ALPHA = 0x2
+LWA_COLORKEY, LWA_ALPHA = 0x1, 0x2
 SPI_GETDESKWALLPAPER, SPI_SETDESKWALLPAPER, SPI_GETWORKAREA = 0x0073, 0x0014, 0x0030
 SPIF_UPDATEINIFILE, SPIF_SENDCHANGE = 0x1, 0x2
 
@@ -198,6 +199,17 @@ def _make_child(hwnd) -> None:
     ex |= WS_EX_LAYERED
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex)
     SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)
+
+
+def make_clickthrough_overlay(hwnd, width: int, height: int, color_key: int = 0x00010101) -> None:
+    """Make a borderless window 100% click-through, transparent on color_key, and hidden from Alt+Tab."""
+    ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+    ex &= ~WS_EX_APPWINDOW
+    ex |= WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex)
+    SetLayeredWindowAttributes(hwnd, color_key, 255, LWA_COLORKEY)
+    HWND_TOPMOST = HWND(-1)
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED)
 
 
 def attach_behind_icons(hwnd, width: int, height: int) -> tuple[str, int]:

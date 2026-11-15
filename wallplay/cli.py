@@ -61,6 +61,41 @@ def split_opts(tokens: list[str]) -> tuple[list[str], dict[str, str]]:
     return pos, opts
 
 
+def strip_inline_comment(line: str) -> str:
+    """Strip `# ...` comments outside quotes while preserving `#ff8800` hex colors."""
+    quote = None
+    for i, ch in enumerate(line):
+        if ch in ('"', "'") and (i == 0 or line[i - 1] != "\\"):
+            quote = None if quote == ch else (ch if quote is None else quote)
+        elif ch == "#" and quote is None and (i == 0 or line[i - 1].isspace()):
+            rest_token = line[i + 1 :].split(None, 1)[0] if line[i + 1 :].strip() else ""
+            is_hex = len(rest_token) in (3, 6, 8) and all(c in "0123456789abcdefABCDEF" for c in rest_token)
+            if not is_hex:
+                return line[:i].rstrip()
+    return line
+
+
+def split_commands(line: str) -> list[str]:
+    """Split on `;` outside quotes after stripping inline `# ...` comments."""
+    cleaned = strip_inline_comment(line)
+    parts, cur, quote = [], [], None
+    for i, ch in enumerate(cleaned):
+        if ch in ('"', "'") and (i == 0 or cleaned[i - 1] != "\\"):
+            quote = None if quote == ch else (ch if quote is None else quote)
+            cur.append(ch)
+        elif ch == ";" and quote is None:
+            s = "".join(cur).strip()
+            if s:
+                parts.append(s)
+            cur = []
+        else:
+            cur.append(ch)
+    tail = "".join(cur).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
 # ==================================================================== live daemon
 def live_info() -> dict | None:
     d = read_json(LIVE_STATE, None)
@@ -76,12 +111,13 @@ def live_info() -> dict | None:
 
 def stop_live(quiet: bool = False) -> bool:
     d = live_info()
+    ensure_dir()
+    livemod.STOP_FILE.write_text("stop", encoding="utf-8")
     if not d:
+        livemod.READY_FILE.unlink(missing_ok=True)
         if not quiet:
             info("No live wallpaper is running.")
         return False
-    ensure_dir()
-    livemod.STOP_FILE.write_text("stop", encoding="utf-8")
     pid = int(d["pid"])
     for _ in range(25):
         if "python" not in winapi.process_image(pid).lower():
@@ -91,6 +127,7 @@ def stop_live(quiet: bool = False) -> bool:
         subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
     LIVE_STATE.unlink(missing_ok=True)
     livemod.STOP_FILE.unlink(missing_ok=True)
+    livemod.READY_FILE.unlink(missing_ok=True)
     if not quiet:
         ok("Stopped live wallpaper.")
     return True
@@ -101,16 +138,26 @@ def start_live(effect: str, arg: str | None = None) -> None:
     if effect not in livemod.EFFECTS:
         raise WallplayError(f"Unknown live effect '{effect}'. Try: {', '.join(livemod.EFFECTS)}")
     stop_live(quiet=True)
+    ensure_dir()
     livemod.STOP_FILE.unlink(missing_ok=True)
+    livemod.READY_FILE.unlink(missing_ok=True)
+    livemod.LOG_FILE.unlink(missing_ok=True)
     pyw = Path(sys.executable).with_name("pythonw.exe")
     exe = str(pyw if pyw.exists() else sys.executable)
     cmd = [exe, "-m", "wallplay.live", effect] + ([arg] if arg else [])
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-    proc = subprocess.Popen(cmd, creationflags=flags, close_fds=True)
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if not pyw.exists() else 0
+    proc = subprocess.Popen(cmd, creationflags=flags)
+    for _ in range(30):
+        if livemod.READY_FILE.exists():
+            break
+        if proc.poll() is not None:
+            err = livemod.LOG_FILE.read_text(encoding="utf-8").strip() if livemod.LOG_FILE.exists() else "process exited early"
+            raise WallplayError(f"Live effect failed to start:\n{err}")
+        time.sleep(0.05)
     write_json(LIVE_STATE, {"pid": proc.pid, "effect": effect, "arg": arg})
     label = f"{effect} ({arg})" if arg else effect
-    ok(f"Live wallpaper [bold]{label}[/] running behind your icons (PID {proc.pid}).")
-    info("Move your mouse across the desktop or click empty wallpaper for fireworks. Stop with `live stop`.")
+    ok(f"Live interactive effect [bold]{label}[/] is now running (PID {proc.pid}).")
+    info("Move your mouse or click anywhere to interact! Run `live stop` when you want to turn it off.")
 
 
 # ==================================================================== command runner
@@ -623,7 +670,7 @@ def repl(app: App) -> None:
             break
         if not line:
             continue
-        for part in [p.strip() for p in line.split(";") if p.strip()]:
+        for part in split_commands(line):
             try:
                 tokens = shlex.split(part)
             except ValueError as e:
@@ -639,7 +686,12 @@ def repl(app: App) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = list(sys.argv[1:] if argv is None else argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    args = []
+    for tok in raw:
+        if tok.startswith("#") and not (len(tok) in (4, 7, 9) and all(c in "0123456789abcdefABCDEF" for c in tok[1:])):
+            break
+        args.append(tok)
     app = App()
     if not args:
         repl(app)
